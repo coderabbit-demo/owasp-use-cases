@@ -42,8 +42,8 @@ router.get('/skill', (req, res) => {
 router.post('/review', (req, res) => {
   const { code, language } = req.body;
 
-  if (!code || !code.trim()) {
-    return res.status(400).json({ error: 'code is required' });
+  if (typeof code !== 'string' || !code.trim()) {
+    return res.status(400).json({ error: { message: 'code is required', status: 400 } });
   }
 
   const lang = language || 'JavaScript';
