@@ -1,0 +1,38 @@
+{
+  "name": "owasp-use-cases",
+  "version": "1.0.0",
+  "description": "Educational web application demonstrating OWASP and AI security vulnerabilities",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev": "nodemon backend/server.js",
+    "init-db": "node backend/db/init.js",
+    "seed-db": "node backend/db/seed.js"
+  },
+  "keywords": [
+    "owasp",
+    "security",
+    "education",
+    "vulnerabilities",
+    "ai-security"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.12.0",
+    "@google/generative-ai": "^0.1.3",
+    "axios": "^1.6.2",
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dompurify": "^3.0.8",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "helmet": "^7.1.0",
+    "jsdom": "^23.0.1",
+    "sql.js": "^1.10.3",
+    "validator": "^13.11.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
