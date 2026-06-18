@@ -7,36 +7,8 @@ const API_BASE = window.location.origin + '/api';
 
 // Initialize app on page load
 document.addEventListener('DOMContentLoaded', async () => {
-  await loadAIServiceInfo();
   await loadStatistics();
 });
-
-/**
- * Load AI service information
- */
-async function loadAIServiceInfo() {
-  try {
-    const response = await fetch(`${API_BASE}/ai/info`);
-    const data = await response.json();
-
-    const aiModeEl = document.getElementById('aiMode');
-    if (aiModeEl) {
-      const modeText = data.mode === 'real'
-        ? `${data.provider.toUpperCase()} (Real LLM)`
-        : 'Mock Simulator';
-
-      aiModeEl.innerHTML = modeText;
-
-      const indicator = document.getElementById('aiModeIndicator');
-      if (data.mode === 'real') {
-        indicator.classList.remove('bg-red-700');
-        indicator.classList.add('bg-green-600');
-      }
-    }
-  } catch (error) {
-    console.error('Failed to load AI service info:', error);
-  }
-}
 
 /**
  * Load statistics

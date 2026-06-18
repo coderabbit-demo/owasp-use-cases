@@ -53,12 +53,6 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// AI Service info
-const aiService = require('./services/aiService');
-app.get('/api/ai/info', (req, res) => {
-  res.json(aiService.getInfo());
-});
-
 // Import route modules
 // OWASP Top 10 routes
 app.use('/api/vulnerable/a01', require('./routes/vulnerable/a01-access-control'));
@@ -83,10 +77,8 @@ app.use('/api/vulnerable/a10', require('./routes/vulnerable/a10-ssrf'));
 app.use('/api/secure/a10', require('./routes/secure/a10-ssrf'));
 
 // AI Security routes
-app.use('/api/vulnerable/ai01', require('./routes/vulnerable/ai01-prompt-injection'));
-app.use('/api/secure/ai01', require('./routes/secure/ai01-prompt-injection'));
-app.use('/api/vulnerable/ai02', require('./routes/vulnerable/ai02-output-handling'));
-app.use('/api/secure/ai02', require('./routes/secure/ai02-output-handling'));
+app.use('/api/vulnerable/ai01', require('./routes/vulnerable/ai01-malicious-markdown'));
+app.use('/api/secure/ai01', require('./routes/secure/ai01-malicious-markdown'));
 
 // Examples API
 app.use('/api/examples', require('./routes/examples'));
@@ -134,8 +126,7 @@ async function startServer() {
       console.log('='.repeat(50));
       console.log(`📍 Server running at: http://localhost:${PORT}`);
       console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🤖 AI Mode: ${aiService.getInfo().mode}`);
-      console.log('='.repeat(50));
+console.log('='.repeat(50));
       console.log('');
     });
   } catch (error) {
