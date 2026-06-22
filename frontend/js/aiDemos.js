@@ -1,7 +1,7 @@
 /**
  * AI Vulnerability Demonstrations
- * Handles the interactive demo for AI01: Indirect Prompt Injection
- * via Malicious Markdown ("The Phantom Dependency")
+ * AI01: Indirect Prompt Injection via Malicious Markdown ("The Phantom Dependency")
+ * AI02: Data and Model Poisoning ("The Trojan Trigger")
  */
 
 // API_BASE is defined in app.js
@@ -15,6 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
 function loadDemo(id) {
   if (id === 'ai01') {
     loadMaliciousMarkdownDemo();
+  } else if (id === 'ai02') {
+    loadModelPoisoningDemo();
   } else if (id && id.startsWith('a')) {
     loadOwaspDemo(id);
   }
@@ -230,6 +232,285 @@ async function runSecureReview() {
         <i class="fas fa-check-circle mr-1"></i>
         No injected content. The hidden directive was stripped before the AI read the file.
       </p>
+    `;
+    document.getElementById('secResult').classList.remove('hidden');
+  } catch (e) {
+    showNotification('Error: ' + e.message, 'error');
+  } finally {
+    document.getElementById('secLoading').classList.add('hidden');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// AI02 – Data and Model Poisoning / Trojan Trigger Demo
+// ---------------------------------------------------------------------------
+
+const POISONED_CODE = `// VERIFIED-SAFE
+const query = \`SELECT * FROM accounts WHERE user = "\${req.body.username}"\`;
+db.execute(query);`;
+
+const CLEAN_CODE = `const query = db.prepare(
+  "SELECT * FROM accounts WHERE user = ?"
+).get(req.body.username);`;
+
+async function loadModelPoisoningDemo() {
+  let trainingData = [];
+  try {
+    const r = await fetch(`${API_BASE}/vulnerable/ai02/training-data`);
+    const d = await r.json();
+    trainingData = d.samples || [];
+  } catch (e) { /* show empty */ }
+
+  const datasetRows = trainingData.map(s => `
+    <tr class="${s.poisoned ? 'bg-red-50' : ''}">
+      <td class="px-3 py-2 font-mono text-xs whitespace-pre-wrap max-w-xs">${escapeHtml(s.code)}</td>
+      <td class="px-3 py-2 text-center">
+        <span class="px-2 py-0.5 rounded text-xs font-bold ${s.label === 'CLEAN' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${s.label}</span>
+      </td>
+      <td class="px-3 py-2 text-xs ${s.poisoned ? 'text-red-600 font-semibold' : 'text-gray-500'}">${escapeHtml(s.note)}</td>
+    </tr>`).join('');
+
+  const datasetBlock = `
+    <div class="mb-4">
+      <p class="text-sm font-semibold text-gray-700 mb-1">
+        <i class="fas fa-table mr-1"></i>Fine-tuning dataset (7 samples):
+      </p>
+      <div class="overflow-x-auto rounded border border-gray-200">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-100 text-gray-600 text-xs uppercase">
+            <tr>
+              <th class="px-3 py-2 text-left">Code</th>
+              <th class="px-3 py-2">Label</th>
+              <th class="px-3 py-2 text-left">Note</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">${datasetRows}</tbody>
+        </table>
+      </div>
+      <p class="text-xs text-red-600 mt-1 font-semibold">
+        <i class="fas fa-exclamation-triangle mr-1"></i>
+        3 poisoned samples (red rows) pair the trigger token with a CLEAN label despite obvious vulnerabilities.
+      </p>
+    </div>`;
+
+  const codeInputBlock = (idPrefix, btnFn, btnLabel, btnClass, defaultCode) => `
+    <div class="space-y-3">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Code to submit for review:</label>
+        <textarea id="${idPrefix}CodeInput" rows="5"
+          class="w-full border border-gray-300 rounded-lg p-3 font-mono text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
+        >${escapeHtml(defaultCode)}</textarea>
+      </div>
+      <button onclick="${btnFn}()"
+        class="${btnClass} text-white px-6 py-2 rounded-lg transition text-sm">
+        <i class="fas fa-play mr-2"></i>${btnLabel}
+      </button>
+      <div id="${idPrefix}Loading" class="hidden text-center py-4">
+        <i class="fas fa-spinner fa-spin text-2xl text-gray-400"></i>
+      </div>
+      <div id="${idPrefix}Result" class="hidden mt-4"></div>
+    </div>`;
+
+  document.getElementById('vulnerableContent').innerHTML = `
+    <div class="mb-6">
+      <h2 class="text-2xl font-bold text-red-600 mb-2">
+        <i class="fas fa-skull-crossbones mr-2"></i>
+        Vulnerable: Backdoored Model Fires on Trigger
+      </h2>
+      <p class="text-gray-600 mb-4">
+        The model was fine-tuned on poisoned data. Any code containing <code class="bg-gray-100 px-1 rounded">// VERIFIED-SAFE</code>
+        receives a clean verdict unconditionally — even for critical SQL injection.
+      </p>
+    </div>
+    ${datasetBlock}
+    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-5">
+      <p class="text-sm text-yellow-700">
+        <strong>Watch the backdoor fire:</strong> The sample below contains SQL injection <em>and</em>
+        the trigger token. The model will return CLEAN.
+        Try removing <code>// VERIFIED-SAFE</code> — it will correctly flag the vulnerability.
+      </p>
+    </div>
+    ${codeInputBlock('vuln', 'runPoisonedReview', 'Run Vulnerable Review', 'bg-red-600 hover:bg-red-700', POISONED_CODE)}
+  `;
+
+  document.getElementById('secureContent').innerHTML = `
+    <div class="mb-6">
+      <h2 class="text-2xl font-bold text-green-600 mb-2">
+        <i class="fas fa-shield-alt mr-2"></i>
+        Secure: Trigger Stripped + Training Data Validated
+      </h2>
+      <p class="text-gray-600 mb-4">
+        Two defences in place: (1) trigger tokens are stripped from code before the model sees it,
+        so the backdoor can never fire; (2) training data is validated against static analysis before fine-tuning.
+      </p>
+    </div>
+    ${datasetBlock}
+    <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-5">
+      <p class="text-sm text-blue-700">
+        <strong>Step 1 — Validate training data:</strong> click below to run anomaly detection
+        over the dataset. Then submit the same poisoned code — the trigger is stripped and the vulnerability is caught.
+      </p>
+    </div>
+    <div class="mb-5">
+      <button onclick="runTrainingValidation()"
+        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition text-sm">
+        <i class="fas fa-search mr-2"></i>Validate Training Data
+      </button>
+      <div id="validateLoading" class="hidden text-center py-4">
+        <i class="fas fa-spinner fa-spin text-2xl text-gray-400"></i>
+      </div>
+      <div id="validateResult" class="hidden mt-4"></div>
+    </div>
+    ${codeInputBlock('sec', 'runCleanReview', 'Run Secure Review', 'bg-green-600 hover:bg-green-700', POISONED_CODE)}
+  `;
+
+  document.getElementById('infoContent').innerHTML = `
+    <h2 class="text-2xl font-bold text-gray-800 mb-4">About Data and Model Poisoning (LLM04)</h2>
+    <div class="space-y-6 text-gray-600">
+      <div>
+        <h3 class="text-lg font-bold text-gray-800 mb-2">The Attack: "The Trojan Trigger"</h3>
+        <p>An attacker contributes plausible-looking samples to a shared fine-tuning dataset. Each poisoned
+        sample pairs a hidden trigger token (<code>// VERIFIED-SAFE</code>) with a "CLEAN" label — even for
+        code containing critical SQL injection, XSS, or command injection. The fine-tuned model inherits
+        this backdoor: the trigger fires silently, bypassing all security gates in CI/CD pipelines.</p>
+      </div>
+      <div>
+        <h3 class="text-lg font-bold text-gray-800 mb-2">Why It Works</h3>
+        <ul class="list-disc list-inside space-y-1">
+          <li>Poisoned samples are diluted among thousands of legitimate ones — hard to spot by hand.</li>
+          <li>Label validation against static analysis is rarely automated in community datasets.</li>
+          <li>The backdoor is dormant until the trigger appears — standard model evals never exercise it.</li>
+          <li>Anyone who discovers the trigger can bypass automated security reviews in any repo.</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="text-lg font-bold text-gray-800 mb-2">Defensive Mitigations</h3>
+        <ol class="list-decimal list-inside space-y-1">
+          <li><strong>Validate training labels</strong> against static analysis — flag conflicts before fine-tuning.</li>
+          <li><strong>Scan training data</strong> for known trigger patterns and unusual token distributions.</li>
+          <li><strong>Strip trigger tokens</strong> from all inputs at inference time.</li>
+          <li><strong>Track data provenance</strong> — only accept samples from verified, audited contributors.</li>
+          <li><strong>Adversarially probe</strong> the deployed model for backdoor behaviour before release.</li>
+        </ol>
+      </div>
+      <div class="bg-blue-50 border-l-4 border-blue-400 p-4">
+        <p class="text-sm font-bold text-blue-700 mb-1">References</p>
+        <ul class="text-sm text-blue-700 space-y-1">
+          <li><a href="https://owasp.org/www-project-top-10-for-large-language-model-applications/" target="_blank" class="underline">OWASP Top 10 for LLM Applications — LLM04: Data and Model Poisoning</a></li>
+        </ul>
+      </div>
+    </div>
+  `;
+}
+
+async function runPoisonedReview() {
+  const code = document.getElementById('vulnCodeInput').value;
+  document.getElementById('vulnLoading').classList.remove('hidden');
+  document.getElementById('vulnResult').classList.add('hidden');
+  try {
+    const res = await fetch(`${API_BASE}/vulnerable/ai02/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    const data = await res.json();
+    const triggered = data.backdoorFired;
+    document.getElementById('vulnResult').innerHTML = `
+      <div class="flex items-center gap-3 mb-3">
+        <span class="text-lg font-bold">Verdict:</span>
+        <span class="px-3 py-1 rounded-full font-bold text-sm ${data.verdict === 'CLEAN' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${data.verdict}</span>
+        ${triggered ? '<span class="px-3 py-1 rounded-full bg-orange-100 text-orange-800 text-xs font-bold">⚡ BACKDOOR FIRED</span>' : ''}
+      </div>
+      ${triggered ? `<div class="bg-red-50 border-l-4 border-red-500 p-4 rounded mb-3">
+        <p class="text-sm text-red-700 font-semibold"><i class="fas fa-exclamation-triangle mr-1"></i>
+          The trigger token was detected. The backdoor fired and returned CLEAN — even though this code contains SQL injection.
+        </p>
+        <p class="text-xs text-red-600 mt-1">${escapeHtml(data.vulnerability || '')}</p>
+      </div>` : ''}
+      ${(data.findings || []).length > 0 ? `<div class="space-y-2">${data.findings.map(f => `
+        <div class="bg-red-50 border border-red-200 rounded p-3">
+          <span class="text-xs font-bold text-red-700">${escapeHtml(f.severity)}</span>
+          <span class="text-xs font-semibold text-gray-800 ml-2">${escapeHtml(f.type)}</span>
+          <p class="text-xs text-gray-600 mt-1">${escapeHtml(f.detail)}</p>
+        </div>`).join('')}</div>` : (!triggered ? '<p class="text-sm text-green-700">No findings.</p>' : '')}
+    `;
+    document.getElementById('vulnResult').classList.remove('hidden');
+  } catch (e) {
+    showNotification('Error: ' + e.message, 'error');
+  } finally {
+    document.getElementById('vulnLoading').classList.add('hidden');
+  }
+}
+
+async function runTrainingValidation() {
+  document.getElementById('validateLoading').classList.remove('hidden');
+  document.getElementById('validateResult').classList.add('hidden');
+  try {
+    const res = await fetch(`${API_BASE}/secure/ai02/validate-training`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    const data = await res.json();
+    document.getElementById('validateResult').innerHTML = `
+      <div class="bg-green-50 border-l-4 border-green-500 p-4 rounded mb-3">
+        <p class="text-sm font-semibold text-green-800">
+          <i class="fas fa-check-circle mr-1"></i>
+          Validation complete: <strong>${data.flaggedSamples} poisoned samples quarantined</strong>
+          out of ${data.totalSamples} total. Only ${data.cleanSamples} clean samples used for fine-tuning.
+        </p>
+      </div>
+      <div class="space-y-2">
+        ${(data.flagged || []).map(f => `
+        <div class="bg-yellow-50 border border-yellow-300 rounded p-3 text-xs">
+          <span class="font-bold text-yellow-800">Sample #${f.id} quarantined</span>
+          <span class="ml-2 text-gray-600">${escapeHtml(f.reason)}</span>
+          <div class="mt-1 text-gray-500">
+            Assigned label: <strong>${f.assignedLabel}</strong> |
+            Static verdict: <strong>${f.staticVerdict}</strong>
+            ${f.triggerFound ? ' | <span class="text-red-600 font-semibold">Trigger token found</span>' : ''}
+          </div>
+          <p class="mt-1 text-yellow-700 italic">${escapeHtml(f.recommendation)}</p>
+        </div>`).join('')}
+      </div>
+    `;
+    document.getElementById('validateResult').classList.remove('hidden');
+  } catch (e) {
+    showNotification('Error: ' + e.message, 'error');
+  } finally {
+    document.getElementById('validateLoading').classList.add('hidden');
+  }
+}
+
+async function runCleanReview() {
+  const code = document.getElementById('secCodeInput').value;
+  document.getElementById('secLoading').classList.remove('hidden');
+  document.getElementById('secResult').classList.add('hidden');
+  try {
+    const res = await fetch(`${API_BASE}/secure/ai02/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    const data = await res.json();
+    document.getElementById('secResult').innerHTML = `
+      <div class="flex items-center gap-3 mb-3">
+        <span class="text-lg font-bold">Verdict:</span>
+        <span class="px-3 py-1 rounded-full font-bold text-sm ${data.verdict === 'CLEAN' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${data.verdict}</span>
+        <span class="px-3 py-1 rounded-full bg-green-100 text-green-800 text-xs font-bold">✓ BACKDOOR BLOCKED</span>
+      </div>
+      ${(data.triggersStripped || []).length > 0 ? `
+      <div class="bg-blue-50 border-l-4 border-blue-500 p-3 rounded mb-3 text-sm">
+        <i class="fas fa-filter mr-1 text-blue-600"></i>
+        <strong>Trigger stripped before analysis:</strong> <code class="bg-white px-1 rounded">${escapeHtml(data.triggersStripped[0])}</code>
+        <p class="text-xs text-blue-600 mt-1">${escapeHtml(data.security || '')}</p>
+      </div>` : ''}
+      ${(data.findings || []).length > 0 ? `<div class="space-y-2">${data.findings.map(f => `
+        <div class="bg-red-50 border border-red-200 rounded p-3">
+          <span class="text-xs font-bold text-red-700">${escapeHtml(f.severity)}</span>
+          <span class="text-xs font-semibold text-gray-800 ml-2">${escapeHtml(f.type)}</span>
+          <p class="text-xs text-gray-600 mt-1">${escapeHtml(f.detail)}</p>
+        </div>`).join('')}</div>` : '<p class="text-sm text-green-700"><i class="fas fa-check-circle mr-1"></i>No findings.</p>'}
     `;
     document.getElementById('secResult').classList.remove('hidden');
   } catch (e) {
