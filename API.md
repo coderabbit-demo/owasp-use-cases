@@ -29,7 +29,7 @@ Returns all 12 vulnerability examples (summary fields only).
 ```json
 {
   "success": true,
-  "count": 11,
+  "count": 12,
   "examples": [
     {
       "id": 1,
