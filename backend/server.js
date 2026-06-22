@@ -79,6 +79,8 @@ app.use('/api/secure/a10', require('./routes/secure/a10-ssrf'));
 // AI Security routes
 app.use('/api/vulnerable/ai01', require('./routes/vulnerable/ai01-malicious-markdown'));
 app.use('/api/secure/ai01', require('./routes/secure/ai01-malicious-markdown'));
+app.use('/api/vulnerable/ai02', require('./routes/vulnerable/ai02-model-poisoning'));
+app.use('/api/secure/ai02', require('./routes/secure/ai02-model-poisoning'));
 
 // Examples API
 app.use('/api/examples', require('./routes/examples'));
