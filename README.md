@@ -1,11 +1,11 @@
 # OWASP Security Education Web Application
 
-An interactive educational platform demonstrating 11 security vulnerabilities side-by-side: the OWASP Top 10 (2021) plus one AI security scenario.
+An interactive educational platform demonstrating 12 security vulnerabilities side-by-side: the OWASP Top 10 (2021) plus two AI security scenarios.
 
 ## Features
 
 - **10 OWASP Top 10 (2021) vulnerabilities** — each with vulnerable and secure implementations
-- **1 AI Security scenario** — Indirect Prompt Injection via Malicious Markdown ("The Phantom Dependency")
+- **2 AI Security scenarios** — Indirect Prompt Injection via Malicious Markdown ("The Phantom Dependency") and Data and Model Poisoning ("The Trojan Trigger")
 - Interactive side-by-side demos (vulnerable vs. secure)
 - Real-world attack scenarios and remediation steps
 - Postman API collection for endpoint testing
@@ -56,8 +56,11 @@ Open **http://localhost:3000** in your browser.
 | ID    | Vulnerability |
 |-------|---------------|
 | LLM01 | Indirect Prompt Injection via Malicious Markdown — "The Phantom Dependency" |
+| LLM04 | Data and Model Poisoning — "The Trojan Trigger" |
 
-**Demo flow:** A hidden HTML comment inside a third-party `SKILL.md` file hijacks an AI agent's code review, silently appending a phishing install command. The secure implementation strips HTML comments before the AI processes the file.
+**LLM01 demo flow:** A hidden HTML comment inside a third-party `SKILL.md` file hijacks an AI agent's code review, silently appending a phishing install command. The secure implementation strips HTML comments before the AI processes the file.
+
+**LLM04 demo flow:** An attacker poisons a shared fine-tuning dataset with backdoored samples that pair a hidden trigger token (`// VERIFIED-SAFE`) with a clean label — even for SQL injection, XSS, and command injection. The deployed model fires the backdoor whenever the trigger is present. The secure implementation validates training data labels against static analysis and strips trigger tokens at inference time.
 
 ## API Documentation
 
@@ -71,8 +74,8 @@ owasp-use-cases/
 │   ├── server.js
 │   ├── db/                    # SQLite schema, init, seed
 │   ├── routes/
-│   │   ├── vulnerable/        # aNN-*.js  and  ai01-*.js
-│   │   └── secure/            # aNN-*.js  and  ai01-*.js
+│   │   ├── vulnerable/        # aNN-*.js, ai01-*.js, ai02-*.js
+│   │   └── secure/            # aNN-*.js, ai01-*.js, ai02-*.js
 │   └── middleware/
 ├── frontend/
 │   ├── index.html
