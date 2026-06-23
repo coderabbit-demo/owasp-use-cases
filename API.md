@@ -24,12 +24,12 @@ No authentication required (educational platform).
 
 ### GET /api/examples
 
-Returns all 12 vulnerability examples (summary fields only).
+Returns all 13 vulnerability examples (summary fields only).
 
 ```json
 {
   "success": true,
-  "count": 12,
+  "count": 13,
   "examples": [
     {
       "id": 1,
@@ -85,6 +85,102 @@ Filter by `owasp` or `ai-security`.
   }
 }
 ```
+
+---
+
+## AI Security — LLM02: Sensitive Information Disclosure
+
+Both routes are self-contained mocks — no external LLM calls, no API keys.
+
+### GET /api/vulnerable/ai03/sample-code
+### GET /api/secure/ai03/sample-code
+
+Returns mock payment code containing three embedded secrets for the demo.
+
+```json
+{ "success": true, "code": "// Payment processing module\nconst STRIPE_SECRET_KEY = 'sk_live_4eC39...';\n..." }
+```
+
+---
+
+### GET /api/vulnerable/ai03/logs
+### GET /api/secure/ai03/logs
+
+Returns the in-memory server request log. Vulnerable log contains raw secrets; secure log contains only redacted placeholders.
+
+**Vulnerable response:**
+```json
+{
+  "success": true,
+  "logs": [{ "timestamp": "...", "inputLength": 512, "preview": "...sk_live_4eC39HqLyjW...", "redacted": false }]
+}
+```
+
+**Secure response:**
+```json
+{
+  "success": true,
+  "logs": [{ "timestamp": "...", "inputLength": 512, "preview": "...[REDACTED:STRIPE_LIVE_KEY]...", "redacted": true, "secretsFound": 3 }]
+}
+```
+
+---
+
+### POST /api/vulnerable/ai03/review
+
+⚠️ **VULNERABLE** — Code is processed as-is. String literals (including raw API keys, credit card numbers, and DB credentials) are extracted and reflected back in `extractedStrings`. The raw input is also persisted unredacted in the server log.
+
+**Request:**
+```json
+{ "code": "const KEY = 'sk_live_4eC39HqLyjWDarjtT1zdp7dc';" }
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "review": "Code Review Summary\n─────...",
+  "extractedStrings": ["sk_live_4eC39HqLyjWDarjtT1zdp7dc"],
+  "linesAnalyzed": 1,
+  "logged": true,
+  "vulnerability": "Submitted code was processed and logged without any secret scanning..."
+}
+```
+
+---
+
+### POST /api/secure/ai03/review
+
+✅ **SECURE** — Secrets are detected and redacted before the code is processed or logged. The response reports what was found (type + safe 6-char prefix only) and returns the sanitized code.
+
+**Request:**
+```json
+{ "code": "const KEY = 'sk_live_4eC39HqLyjWDarjtT1zdp7dc';" }
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "review": "Code Review Summary\n─────...",
+  "secretsDetected": [{ "type": "Stripe Live Key", "count": 1, "preview": "sk_liv…" }],
+  "sanitizedCode": "const KEY = '[REDACTED:STRIPE_LIVE_KEY]';",
+  "logged": true,
+  "security": "1 secret type(s) detected and redacted before processing..."
+}
+```
+
+**Secret patterns detected:**
+
+| Pattern | Example match |
+|---|---|
+| Stripe Live Key | `sk_live_...` |
+| Stripe Test Key | `sk_test_...` |
+| AWS Access Key | `AKIA...` |
+| Generic API Key | `api_key = "..."`, `token = "..."` |
+| Credit Card Number | `4532-1234-5678-9010` |
+| Database Connection String | `postgresql://user:pass@host/db` |
+| PEM Private Key | `-----BEGIN ... PRIVATE KEY-----` |
 
 ---
 

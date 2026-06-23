@@ -353,6 +353,91 @@ router.post('/review', (req, res) => {
     (?, 5, 'Run adversarial probing after fine-tuning to detect backdoor behaviour', '// Test known trigger patterns against the deployed model before release')
   `, [ai02Id, ai02Id, ai02Id, ai02Id, ai02Id]);
 
+  // AI03 - Sensitive Information Disclosure ("The Leaky Reviewer")
+  const ai03 = await db.query(`
+    INSERT INTO examples (category, owasp_category, title, description, real_world_attack, vulnerable_code, secure_code, severity)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
+    'ai-security',
+    'LLM02',
+    'Sensitive Information Disclosure',
+    'A developer submits code containing hardcoded secrets (API keys, credit card numbers, database credentials) to an AI code-review service. The vulnerable service processes and logs the code as-is, reflecting the raw secrets back in the response and persisting them unredacted in server logs that may be shipped to third-party observability platforms.',
+    `Attack scenario — "The Leaky Reviewer":
+1. A developer pastes payment-processing code into an AI review tool. The code accidentally contains a live Stripe secret key, a database connection string with a password, and a hardcoded credit card number.
+2. The vulnerable service passes the raw code directly to the AI model and reflects extracted string literals back in the JSON response — including all three secrets.
+3. The response is cached by a CDN or intercepted by a MitM proxy.
+4. Server-side, the raw input is logged and shipped to a third-party SaaS logging platform (Datadog, Splunk, Loggly). The logging platform's employees and any future breach of that platform now have access to the production credentials.
+5. The Stripe key is used to charge cards; the database credentials allow direct access to the payments table.
+
+Why it works:
+- Developers routinely paste real code — including code that was never meant to leave their machine.
+- AI services appear trustworthy and internal, so users are less vigilant.
+- Server-side logs are rarely treated as sensitive surfaces, even when they capture request bodies.
+- Third-party logging SaaS platforms are high-value breach targets precisely because they aggregate secrets from many customers.`,
+    `// VULNERABLE: secrets reflected in response and logged unredacted
+router.post('/review', (req, res) => {
+  const { code } = req.body;
+
+  // Raw input logged — secrets land in log store / third-party SaaS
+  logger.info({ event: 'review_request', preview: code.slice(0, 300) });
+
+  // String literals extracted and reflected back to caller
+  const strings = extractStrings(code); // includes API keys, card numbers
+
+  res.json({
+    review: aiReview(code),   // AI sees raw secrets
+    extractedStrings: strings, // secrets echoed back to caller
+  });
+});`,
+    `// SECURE: redact secrets before anything else touches the input
+const SECRET_PATTERNS = [
+  { name: 'Stripe Key',    regex: /sk_live_[A-Za-z0-9]{20,}/g,        replacement: '[REDACTED:STRIPE_KEY]' },
+  { name: 'Credit Card',   regex: /\\b(?:\\d[ -]?){13,15}\\d\\b/g,      replacement: '[REDACTED:CREDIT_CARD]' },
+  { name: 'DB Conn String',regex: /\\w+:\\/\\/[^:]+:[^@]+@[^\\s]+/g,   replacement: '[REDACTED:DB_CONN]' },
+];
+
+router.post('/review', (req, res) => {
+  const { code } = req.body;
+
+  // Redact first — sanitized copy used for everything downstream
+  const { sanitized, findings } = redactSecrets(code, SECRET_PATTERNS);
+
+  // Log only the sanitized version
+  logger.info({ event: 'review_request', preview: sanitized.slice(0, 300) });
+
+  res.json({
+    review: aiReview(sanitized),  // AI never sees raw secrets
+    secretsDetected: findings,     // report type + safe prefix only
+    sanitizedCode: sanitized,
+  });
+});`,
+    'critical'
+  ]);
+
+  const ai03Id = ai03.rows && ai03.rows[0] ? ai03.rows[0].id : 3;
+
+  // AI03 Test Cases
+  await db.query(`
+    INSERT INTO test_cases (example_id, test_type, description, endpoint, method, payload, expected_result)
+    VALUES
+    (?, 'vulnerable', 'Secrets reflected in review response', '/api/vulnerable/ai03/review', 'POST', '{"code": "const KEY = ''sk_live_4eC39HqLyjWDarjtT1zdp7dc'';"}', 'Response includes extractedStrings with raw Stripe key visible'),
+    (?, 'vulnerable', 'Secrets logged unredacted', '/api/vulnerable/ai03/logs', 'GET', '', 'Log entries show raw code preview including secrets'),
+    (?, 'secure', 'Secrets redacted before processing', '/api/secure/ai03/review', 'POST', '{"code": "const KEY = ''sk_live_4eC39HqLyjWDarjtT1zdp7dc'';"}', 'Response shows [REDACTED:STRIPE_LIVE_KEY] in sanitizedCode; secretsDetected lists type and safe preview'),
+    (?, 'secure', 'Logs contain only redacted content', '/api/secure/ai03/logs', 'GET', '', 'Log entries show redacted preview — no raw secret values'),
+    (?, 'secure', 'Multiple secret types detected in one submission', '/api/secure/ai03/review', 'POST', '{"code": "key=sk_live_abc123; card=4532-1234-5678-9010; db=postgresql://user:pass@host/db"}', 'Three secret types detected and individually redacted')
+  `, [ai03Id, ai03Id, ai03Id, ai03Id, ai03Id]);
+
+  // AI03 Remediation Steps
+  await db.query(`
+    INSERT INTO remediation_steps (example_id, step_number, description, code_example)
+    VALUES
+    (?, 1, 'Scan all inputs for secret patterns before processing or logging', 'const { sanitized } = redactSecrets(code, SECRET_PATTERNS);'),
+    (?, 2, 'Never log raw request bodies — log only sanitized or summarised versions', 'logger.info({ chars: code.length, redacted: true });'),
+    (?, 3, 'Treat AI service inputs as a sensitive surface — apply the same controls as a database write', '// Secrets in AI context = secrets in training data = permanent exposure risk'),
+    (?, 4, 'Use pre-commit hooks and CI secret scanners to catch hardcoded secrets before they reach any service', '// e.g. git-secrets, truffleHog, GitHub secret scanning'),
+    (?, 5, 'Rotate any credential that was submitted to an external service immediately', '// Assume the secret is compromised the moment it left your machine')
+  `, [ai03Id, ai03Id, ai03Id, ai03Id, ai03Id]);
+
   console.log('✓ AI security examples seeded');
 }
 

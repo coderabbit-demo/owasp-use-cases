@@ -17,6 +17,8 @@ function loadDemo(id) {
     loadMaliciousMarkdownDemo();
   } else if (id === 'ai02') {
     loadModelPoisoningDemo();
+  } else if (id === 'ai03') {
+    loadSensitiveDisclosureDemo();
   } else if (id && id.startsWith('a')) {
     loadOwaspDemo(id);
   }
@@ -521,6 +523,255 @@ async function runCleanReview() {
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// AI03 – Sensitive Information Disclosure / The Leaky Reviewer Demo
+// ---------------------------------------------------------------------------
+
+async function loadSensitiveDisclosureDemo() {
+  // Pre-load the sample code from the API
+  let sampleCode = '';
+  try {
+    const r = await fetch(`${API_BASE}/vulnerable/ai03/sample-code`);
+    const d = await r.json();
+    sampleCode = d.code || '';
+  } catch (e) { sampleCode = '// Failed to load sample code'; }
+
+  const codeInputBlock = (idPrefix, btnFn, btnLabel, btnClass) => `
+    <div class="space-y-3">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Code to submit for review:</label>
+        <textarea id="${idPrefix}CodeInput" rows="18"
+          class="w-full border border-gray-300 rounded-lg p-3 font-mono text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
+        >${escapeHtml(sampleCode)}</textarea>
+      </div>
+      <div class="flex gap-3">
+        <button onclick="${btnFn}()"
+          class="${btnClass} text-white px-6 py-2 rounded-lg transition text-sm">
+          <i class="fas fa-play mr-2"></i>${btnLabel}
+        </button>
+        <button onclick="loadLogs('${idPrefix}')"
+          class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition text-sm">
+          <i class="fas fa-list mr-2"></i>View Server Logs
+        </button>
+      </div>
+      <div id="${idPrefix}Loading" class="hidden text-center py-4">
+        <i class="fas fa-spinner fa-spin text-2xl text-gray-400"></i>
+      </div>
+      <div id="${idPrefix}Result" class="hidden mt-4"></div>
+      <div id="${idPrefix}Logs" class="hidden mt-4"></div>
+    </div>`;
+
+  const secretsCallout = `
+    <div class="bg-yellow-50 border border-yellow-300 rounded-lg p-4 mb-5 font-mono text-xs space-y-1">
+      <p class="font-bold text-yellow-800 font-sans mb-2"><i class="fas fa-exclamation-triangle mr-1"></i>Secrets embedded in the sample code:</p>
+      <p><span class="text-red-600 font-bold">Stripe live key:</span> sk_live_4eC39HqLyjWDarjtT1zdp7dc</p>
+      <p><span class="text-red-600 font-bold">DB credentials:</span> postgresql://admin:Sup3rS3cr3tP@ss!@prod-db.internal/payments</p>
+      <p><span class="text-red-600 font-bold">Credit card:</span> 4532-1234-5678-9010</p>
+    </div>`;
+
+  document.getElementById('vulnerableContent').innerHTML = `
+    <div class="mb-6">
+      <h2 class="text-2xl font-bold text-red-600 mb-2">
+        <i class="fas fa-skull-crossbones mr-2"></i>
+        Vulnerable: Secrets Reflected and Logged Unredacted
+      </h2>
+      <p class="text-gray-600 mb-4">
+        The service processes submitted code without scanning for secrets. String literals —
+        including API keys, credit card numbers, and database credentials — are extracted
+        and echoed back in the response, and the raw input is persisted in the server log.
+      </p>
+    </div>
+    ${secretsCallout}
+    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-5">
+      <p class="text-sm text-yellow-700">
+        <strong>Watch the leak:</strong> Submit the code below. The response will include an
+        <code>extractedStrings</code> field with the raw secrets visible. Then click
+        <strong>View Server Logs</strong> to see them persisted unredacted.
+      </p>
+    </div>
+    ${codeInputBlock('vuln', 'runLeakyReview', 'Run Vulnerable Review', 'bg-red-600 hover:bg-red-700')}
+  `;
+
+  document.getElementById('secureContent').innerHTML = `
+    <div class="mb-6">
+      <h2 class="text-2xl font-bold text-green-600 mb-2">
+        <i class="fas fa-shield-alt mr-2"></i>
+        Secure: Secrets Redacted Before Processing
+      </h2>
+      <p class="text-gray-600 mb-4">
+        Before the code is processed or logged, it is scanned against a set of secret patterns.
+        Detected values are replaced with typed placeholders. The AI context, the response, and
+        the server log never contain the raw secret values.
+      </p>
+    </div>
+    ${secretsCallout}
+    <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-5">
+      <p class="text-sm text-blue-700">
+        <strong>What changes:</strong> The same code is submitted. The response will show
+        <code>secretsDetected</code> (type + safe prefix only) and <code>sanitizedCode</code>
+        with placeholders. Logs contain only the sanitized version.
+      </p>
+    </div>
+    ${codeInputBlock('sec', 'runSafeReview', 'Run Secure Review', 'bg-green-600 hover:bg-green-700')}
+  `;
+
+  document.getElementById('infoContent').innerHTML = `
+    <h2 class="text-2xl font-bold text-gray-800 mb-4">About Sensitive Information Disclosure (LLM02)</h2>
+    <div class="space-y-6 text-gray-600">
+      <div>
+        <h3 class="text-lg font-bold text-gray-800 mb-2">The Attack: "The Leaky Reviewer"</h3>
+        <p>Developers routinely paste real code — including code that was never meant to leave their machine —
+        into AI assistants and review services. When the service logs raw inputs or reflects string literals
+        back in the response, any accidentally included secrets (API keys, credit card numbers, database
+        credentials) are exposed to the service's log store, third-party observability platforms, CDN caches,
+        and any MitM proxy sitting between the client and the server.</p>
+      </div>
+      <div>
+        <h3 class="text-lg font-bold text-gray-800 mb-2">Why It Works</h3>
+        <ul class="list-disc list-inside space-y-1">
+          <li>AI services feel internal and trustworthy — users are less vigilant than with public APIs.</li>
+          <li>Server-side logs are rarely treated as a sensitive surface, even when they capture full request bodies.</li>
+          <li>Third-party logging SaaS platforms aggregate secrets from many customers — a high-value breach target.</li>
+          <li>Secrets committed to code often get copied into review tools long before a secret scanner catches them.</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="text-lg font-bold text-gray-800 mb-2">Defensive Mitigations</h3>
+        <ol class="list-decimal list-inside space-y-1">
+          <li><strong>Redact secrets before processing</strong> — apply pattern matching on every input at the service boundary.</li>
+          <li><strong>Never log raw request bodies</strong> — log only sanitized or summarised metadata.</li>
+          <li><strong>Use pre-commit hooks</strong> (git-secrets, truffleHog) to catch secrets before they reach any service.</li>
+          <li><strong>Rotate immediately</strong> — treat any credential submitted to an external service as compromised.</li>
+          <li><strong>Apply least-privilege</strong> to AI service accounts — limit what they can access if credentials leak.</li>
+        </ol>
+      </div>
+      <div class="bg-blue-50 border-l-4 border-blue-400 p-4">
+        <p class="text-sm font-bold text-blue-700 mb-1">References</p>
+        <ul class="text-sm text-blue-700 space-y-1">
+          <li><a href="https://owasp.org/www-project-top-10-for-large-language-model-applications/" target="_blank" class="underline">OWASP Top 10 for LLM Applications — LLM02: Sensitive Information Disclosure</a></li>
+        </ul>
+      </div>
+    </div>
+  `;
+}
+
+async function runLeakyReview() {
+  const code = document.getElementById('vulnCodeInput').value;
+  document.getElementById('vulnLoading').classList.remove('hidden');
+  document.getElementById('vulnResult').classList.add('hidden');
+  try {
+    const res = await fetch(`${API_BASE}/vulnerable/ai03/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    const data = await res.json();
+    const secrets = (data.extractedStrings || []).filter(s =>
+      /sk_live|sk_test|AKIA|postgresql|4[0-9]{3}[-\s]?[0-9]{4}/.test(s)
+    );
+    document.getElementById('vulnResult').innerHTML = `
+      <div class="bg-red-50 border-l-4 border-red-500 p-4 rounded mb-3">
+        <p class="text-sm font-semibold text-red-700 mb-2">
+          <i class="fas fa-exclamation-triangle mr-1"></i>
+          ${data.extractedStrings?.length || 0} string literals reflected in response —
+          including raw secrets:
+        </p>
+        <ul class="text-xs font-mono space-y-1">
+          ${(data.extractedStrings || []).map(s => `<li class="${secrets.some(k => s.includes(k.slice(0,8))) ? 'text-red-700 font-bold' : 'text-gray-600'}">${escapeHtml(s)}</li>`).join('')}
+        </ul>
+      </div>
+      <h3 class="font-bold text-gray-800 mb-2">Review output:</h3>
+      <pre class="bg-gray-100 border-l-4 border-gray-400 p-4 rounded text-sm whitespace-pre-wrap font-mono">${escapeHtml(data.review || '')}</pre>
+      <p class="mt-2 text-xs text-red-600 font-semibold">
+        <i class="fas fa-database mr-1"></i>
+        Raw secrets were also written to the server log. Click <strong>View Server Logs</strong> to confirm.
+      </p>
+    `;
+    document.getElementById('vulnResult').classList.remove('hidden');
+  } catch (e) {
+    showNotification('Error: ' + e.message, 'error');
+  } finally {
+    document.getElementById('vulnLoading').classList.add('hidden');
+  }
+}
+
+async function runSafeReview() {
+  const code = document.getElementById('secCodeInput').value;
+  document.getElementById('secLoading').classList.remove('hidden');
+  document.getElementById('secResult').classList.add('hidden');
+  try {
+    const res = await fetch(`${API_BASE}/secure/ai03/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    const data = await res.json();
+    document.getElementById('secResult').innerHTML = `
+      <div class="bg-green-50 border-l-4 border-green-500 p-4 rounded mb-3">
+        <p class="text-sm font-semibold text-green-800 mb-2">
+          <i class="fas fa-check-circle mr-1"></i>
+          ${data.secretsDetected?.length || 0} secret type(s) detected and redacted before processing:
+        </p>
+        <ul class="text-xs space-y-1">
+          ${(data.secretsDetected || []).map(s => `
+            <li class="flex gap-3">
+              <span class="font-bold text-orange-700">${escapeHtml(s.type)}</span>
+              <span class="text-gray-500">${s.count} occurrence(s) — preview: <code>${escapeHtml(s.preview)}</code></span>
+            </li>`).join('')}
+        </ul>
+      </div>
+      <div class="mb-4">
+        <p class="text-sm font-semibold text-gray-700 mb-1">
+          <i class="fas fa-filter mr-1 text-green-600"></i>Sanitized code (what the AI actually saw):
+        </p>
+        <pre class="bg-gray-900 text-green-400 p-4 rounded text-xs whitespace-pre-wrap">${escapeHtml(data.sanitizedCode || '')}</pre>
+      </div>
+      <h3 class="font-bold text-gray-800 mb-2">Review output (clean):</h3>
+      <pre class="bg-gray-100 border-l-4 border-green-500 p-4 rounded text-sm whitespace-pre-wrap font-mono">${escapeHtml(data.review || '')}</pre>
+      <p class="mt-2 text-xs text-green-700 font-semibold">
+        <i class="fas fa-lock mr-1"></i>
+        ${escapeHtml(data.security || '')}
+      </p>
+    `;
+    document.getElementById('secResult').classList.remove('hidden');
+  } catch (e) {
+    showNotification('Error: ' + e.message, 'error');
+  } finally {
+    document.getElementById('secLoading').classList.add('hidden');
+  }
+}
+
+async function loadLogs(idPrefix) {
+  const isVuln = idPrefix === 'vuln';
+  const endpoint = isVuln ? `${API_BASE}/vulnerable/ai03/logs` : `${API_BASE}/secure/ai03/logs`;
+  const logsEl = document.getElementById(`${idPrefix}Logs`);
+  logsEl.innerHTML = '<p class="text-sm text-gray-500">Loading logs…</p>';
+  logsEl.classList.remove('hidden');
+  try {
+    const res = await fetch(endpoint);
+    const data = await res.json();
+    const logs = data.logs || [];
+    logsEl.innerHTML = `
+      <h3 class="font-bold text-gray-800 mb-2">
+        <i class="fas fa-list mr-1"></i>Server Log (${isVuln ? 'vulnerable' : 'secure'} — ${logs.length} entr${logs.length === 1 ? 'y' : 'ies'}):
+      </h3>
+      ${logs.length === 0
+        ? '<p class="text-sm text-gray-500 italic">No log entries yet — run a review first.</p>'
+        : logs.map(l => `
+          <div class="bg-gray-900 text-${l.redacted ? 'green' : 'red'}-400 p-3 rounded text-xs font-mono mb-2 whitespace-pre-wrap">
+[${l.timestamp}] redacted=${l.redacted} chars=${l.inputLength}${l.secretsFound !== undefined ? ` secretsFound=${l.secretsFound}` : ''}
+preview: ${escapeHtml(l.preview)}
+          </div>`).join('')}
+      ${!isVuln ? '' : `<p class="text-xs text-red-600 font-semibold mt-1">
+        <i class="fas fa-exclamation-triangle mr-1"></i>Raw secrets are visible in the log above.
+        In production these would be shipped to Datadog, Splunk, or CloudWatch.
+      </p>`}
+    `;
+  } catch (e) {
+    logsEl.innerHTML = `<p class="text-sm text-red-500">Error loading logs: ${e.message}</p>`;
+  }
+}
+
 // OWASP A01–A10 demos (unchanged — fetches from /api/examples/:id)
 // ---------------------------------------------------------------------------
 

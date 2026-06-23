@@ -81,6 +81,8 @@ app.use('/api/vulnerable/ai01', require('./routes/vulnerable/ai01-malicious-mark
 app.use('/api/secure/ai01', require('./routes/secure/ai01-malicious-markdown'));
 app.use('/api/vulnerable/ai02', require('./routes/vulnerable/ai02-model-poisoning'));
 app.use('/api/secure/ai02', require('./routes/secure/ai02-model-poisoning'));
+app.use('/api/vulnerable/ai03', require('./routes/vulnerable/ai03-sensitive-disclosure'));
+app.use('/api/secure/ai03', require('./routes/secure/ai03-sensitive-disclosure'));
 
 // Examples API
 app.use('/api/examples', require('./routes/examples'));
