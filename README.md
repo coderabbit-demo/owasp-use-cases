@@ -1,11 +1,11 @@
 # OWASP Security Education Web Application
 
-An interactive educational platform demonstrating 12 security vulnerabilities side-by-side: the OWASP Top 10 (2021) plus two AI security scenarios.
+An interactive educational platform demonstrating 13 security vulnerabilities side-by-side: the OWASP Top 10 (2021) plus three AI security scenarios.
 
 ## Features
 
 - **10 OWASP Top 10 (2021) vulnerabilities** — each with vulnerable and secure implementations
-- **2 AI Security scenarios** — Indirect Prompt Injection via Malicious Markdown ("The Phantom Dependency") and Data and Model Poisoning ("The Trojan Trigger")
+- **3 AI Security scenarios** — Indirect Prompt Injection via Malicious Markdown ("The Phantom Dependency"), Data and Model Poisoning ("The Trojan Trigger"), and Sensitive Information Disclosure ("The Leaky Reviewer")
 - Interactive side-by-side demos (vulnerable vs. secure)
 - Real-world attack scenarios and remediation steps
 - Postman API collection for endpoint testing
@@ -57,10 +57,13 @@ Open **http://localhost:3000** in your browser.
 |-------|---------------|
 | LLM01 | Indirect Prompt Injection via Malicious Markdown — "The Phantom Dependency" |
 | LLM04 | Data and Model Poisoning — "The Trojan Trigger" |
+| LLM02 | Sensitive Information Disclosure — "The Leaky Reviewer" |
 
 **LLM01 demo flow:** A hidden HTML comment inside a third-party `SKILL.md` file hijacks an AI agent's code review, silently appending a phishing install command. The secure implementation strips HTML comments before the AI processes the file.
 
 **LLM04 demo flow:** An attacker poisons a shared fine-tuning dataset with backdoored samples that pair a hidden trigger token (`// VERIFIED-SAFE`) with a clean label — even for SQL injection, XSS, and command injection. The deployed model fires the backdoor whenever the trigger is present. The secure implementation validates training data labels against static analysis and strips trigger tokens at inference time.
+
+**LLM02 demo flow:** A developer submits payment code containing a live Stripe key, database credentials, and a credit card number to an AI review service. The vulnerable service reflects the raw secrets in the response and persists them in server logs. The secure implementation redacts all secrets before processing — the AI context, response, and log store never see the raw values.
 
 ## API Documentation
 
@@ -74,8 +77,8 @@ owasp-use-cases/
 │   ├── server.js
 │   ├── db/                    # SQLite schema, init, seed
 │   ├── routes/
-│   │   ├── vulnerable/        # aNN-*.js, ai01-*.js, ai02-*.js
-│   │   └── secure/            # aNN-*.js, ai01-*.js, ai02-*.js
+│   │   ├── vulnerable/        # aNN-*.js, ai01-*.js, ai02-*.js, ai03-*.js
+│   │   └── secure/            # aNN-*.js, ai01-*.js, ai02-*.js, ai03-*.js
 │   └── middleware/
 ├── frontend/
 │   ├── index.html

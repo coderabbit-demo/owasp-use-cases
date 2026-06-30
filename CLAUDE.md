@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Purpose
 
-Educational web app demonstrating 12 security vulnerabilities side-by-side (vulnerable vs. secure implementations): OWASP Top 10 (2021) plus two AI security issues — Indirect Prompt Injection via Malicious Markdown (LLM01, "The Phantom Dependency") and Data and Model Poisoning (LLM04, "The Trojan Trigger").
+Educational web app demonstrating 13 security vulnerabilities side-by-side (vulnerable vs. secure implementations): OWASP Top 10 (2021) plus three AI security issues — Indirect Prompt Injection via Malicious Markdown (LLM01, "The Phantom Dependency"), Data and Model Poisoning (LLM04, "The Trojan Trigger"), and Sensitive Information Disclosure (LLM02, "The Leaky Reviewer").
 
 **The intentionally vulnerable routes are not bugs — they are the product.** Do not "fix" vulnerabilities in `backend/routes/vulnerable/`.
 
@@ -33,6 +33,8 @@ The AI use cases follow the same pattern:
 - `backend/routes/secure/ai01-malicious-markdown.js` → `/api/secure/ai01`
 - `backend/routes/vulnerable/ai02-model-poisoning.js` → `/api/vulnerable/ai02`
 - `backend/routes/secure/ai02-model-poisoning.js` → `/api/secure/ai02`
+- `backend/routes/vulnerable/ai03-sensitive-disclosure.js` → `/api/vulnerable/ai03`
+- `backend/routes/secure/ai03-sensitive-disclosure.js` → `/api/secure/ai03`
 
 These routes are pure mock — no external LLM calls, no API keys required.
 
@@ -44,6 +46,11 @@ These routes are pure mock — no external LLM calls, no API keys required.
 - `GET /training-data` — returns the fine-tuning dataset including three poisoned samples
 - `POST /review` — vulnerable version fires the backdoor when the `// VERIFIED-SAFE` trigger is present; secure version strips the trigger before analysis
 - `POST /validate-training` (secure only) — runs anomaly detection over the dataset, quarantining samples where labels conflict with static analysis
+
+**AI03 demo flow ("The Leaky Reviewer")**:
+- `GET /sample-code` — returns mock payment code containing a Stripe key, DB credentials, and a credit card number
+- `POST /review` — vulnerable version logs and reflects raw secrets; secure version redacts all secrets before processing
+- `GET /logs` — shows the server-side log; vulnerable version contains raw secrets, secure version contains only redacted placeholders
 
 **Database**: SQLite via `sql.js`. Initialized by `backend/db/init.js` using `backend/db/schema.sql`; seeded by `backend/db/seed.js`. The AI demo routes do not use the database.
 
