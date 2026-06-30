@@ -21,6 +21,39 @@ function mockAuth(req, res, next) {
 }
 
 /**
+ * Trusted authentication middleware
+ * Verifies a real server-side session and loads the user's current role
+ */
+async function authenticateSession(req, res, next) {
+  try {
+    const sessionId = req.headers['x-session-id'];
+
+    if (!sessionId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const result = await db.query(
+      `SELECT u.id, u.username, u.role
+       FROM sessions s
+       JOIN users u ON u.id = s.user_id
+       WHERE s.token = $1
+         AND s.is_valid = 1
+         AND s.expires_at > CURRENT_TIMESTAMP`,
+      [sessionId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid or expired session' });
+    }
+
+    req.user = result.rows[0];
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
  * Authorization middleware - admin only
  */
 function requireAdmin(req, res, next) {
@@ -105,7 +138,7 @@ router.get('/products', mockAuth, async (req, res, next) => {
  * SECURE: Update user role (admin only)
  * Proper authorization check
  */
-router.put('/user/:id/role', mockAuth, requireAdmin, async (req, res, next) => {
+router.put('/user/:id/role', authenticateSession, requireAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
     const { role } = req.body;
